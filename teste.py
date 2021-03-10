@@ -12,7 +12,7 @@ import altair as alt
 import cryptography
 from cryptography.fernet import Fernet
 from PIL import Image
-
+import base64
 
 @st.cache(allow_output_mutation=True)
 def Preenchendo_com_media(data, column, optimalK):
@@ -72,6 +72,10 @@ def clusterOptimalK(data, lat, lon, optimalK):
     kmeans.fit_transform(dataframe)
     return kmeans
 
+def get_table_download_link(df):
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()  
+    return f'<a href="data:file/csv;base64,{b64}" download="dados_tratados.csv">Baixar arquivo CSV</a>'
 #################################################################################################################
 # Funções antigas reaproveitadas
 
@@ -198,8 +202,13 @@ def decrypter(data_name,file_name, key):
 
 #################################################################################################################
 #Sistema
-
-st.title('Análise semi-supervisonada para geoprocessamento')
+st.set_page_config(
+    page_title="Análise semi-supervisonada para geoprocessamento",
+    page_icon=":globe_with_meridians:",
+    layout="centered",
+    initial_sidebar_state="expanded",
+)
+st.title('Análise semi-supervisonada para geoprocessamento :earth_americas:')
 
 with st.beta_expander("Instruções de uso"):
     st.header('1. Escolha seus dados')
@@ -233,14 +242,19 @@ st.set_option('deprecation.showfileUploaderEncoding', False)
 uploaded_file = st.sidebar.file_uploader("Escolha um arquivo csv", type='csv')
 
 delimiter = st.sidebar.text_input("Delimitador: (Padrão: ' , ')", value = ',')
+if delimiter != ',':
+    st.sidebar.warning("Verifique o estado do dataframe na exibição ao lado")
 
 if uploaded_file is not None:
     data = pd.DataFrame(pd.read_csv(uploaded_file, delimiter = delimiter)) 
-
+else:
+    st.info("Estes dados são apenas exemplos. Selecione um arquivo para poder executar")
 #Seleção de colunas
 
 lat = st.sidebar.selectbox('Latitude:',data.columns)
 lon = st.sidebar.selectbox('Longitude:',data.columns)
+if lat == lon :
+        st.sidebar.warning("Latitude e longitude estão iguais")
 conv = st.sidebar.checkbox("Converter de DMS para DD")
 mean_col = st.sidebar.multiselect("Dados a serem preenchidos com média",data.columns)
 mode_col = st.sidebar.multiselect("Dados a serem preenchidos com moda",data.columns)
@@ -269,156 +283,157 @@ if uploaded_file is not None:
     ex = st.checkbox("Executar agrupamento")
 
     if ex:
-        coord = coord.dropna()
-        coord = coord.reset_index(drop = True)
+        with st.spinner("Executando..."):
+                coord = coord.dropna()
+                coord = coord.reset_index(drop = True)
 
-        if yellowK:
-            yellowReturn = Encontrando_K_Ideal(coord) 
-            optimalK = yellowReturn.elbow_value_
-            st.subheader('Gráfico do método do cotovelo:')
-            plot = Image.open("teste_plot.png")
-            st.image(plot, width = 830)
-            #st.image(plot, caption='Método do cotovelo', width = 830)
-            st.write('K ideal: ',optimalK)
+                if yellowK:
+                    yellowReturn = Encontrando_K_Ideal(coord) 
+                    optimalK = yellowReturn.elbow_value_
+                    st.subheader('Gráfico do método do cotovelo:')
+                    plot = Image.open("teste_plot.png")
+                    st.image(plot, width = 830)
+                    #st.image(plot, caption='Método do cotovelo', width = 830)
+                    st.write('K ideal: ',optimalK)
 
 
-        kmeans = clusterOptimalK(coord, lat, lon, int(optimalK)  )
-        coord['Labels'] = kmeans.labels_
-        
-        #Preenchimento
-        data = data.dropna(subset =[lat,lon])
-        data = data.reset_index(drop = True)
-        data['Label']  = coord['Labels']
-        tool_feat = data.columns.tolist()
-        if mean_col:
-            #mean_col
-            for mean in mean_col:
-                data = Preenchendo_com_media(data, mean, optimalK)
-        
-        if mode_col:    
-            #mode_col
-            for modes in mode_col:
-                data = Preenchendo_com_moda(data, modes, optimalK)
-
-        #if st.button("Visualizar agrupamento"):
-        #Visualização
-        st.subheader('Dados tratados e preenchidos:')
-        st.write(data)
-        #st.write(coord)
-        col1, col2 = st.beta_columns([1,3])
-        with col1:
-            st.subheader('Coordenadas dos centróides:')
-            #Lembrar de renomear as colunas 
-            st.write(kmeans.cluster_centers_)
-
-        #plt.figure( figsize=(15, 10))
-        #scatter_plot = plt.scatter(coord[lon],coord[lat], alpha = 1, c = coord['Labels'], cmap="viridis")
-        #plt.scatter(kmeans.cluster_centers_[:, 1], kmeans.cluster_centers_[:, 0], s = 100, c = 'red',label = 'Centroids')
-        #plt.xlabel('Longitude')
-        #plt.ylabel('Latitude')
-        #plt.legend()
-        #st.pyplot()
+                kmeans = clusterOptimalK(coord, lat, lon, int(optimalK)  )
+                coord['Labels'] = kmeans.labels_
                 
-        #st.write(tool_feat)
-        #st.write(data.columns)
+                #Preenchimento
+                data = data.dropna(subset =[lat,lon])
+                data = data.reset_index(drop = True)
+                data['Label']  = coord['Labels']
+                tool_feat = data.columns.tolist()
+                if mean_col:
+                    #mean_col
+                    for mean in mean_col:
+                        data = Preenchendo_com_media(data, mean, optimalK)
+                
+                if mode_col:    
+                    #mode_col
+                    for modes in mode_col:
+                        data = Preenchendo_com_moda(data, modes, optimalK)
 
-        #Exibição dos grupos
-        with col2:
-            #Visualização geral
-            st.subheader('Gráfico de dispersão dos dados:')
-            selection = alt.selection_multi(fields=['Label'], bind='legend')
+                #if st.button("Visualizar agrupamento"):
+                #Visualização
+                st.subheader('Dados tratados e preenchidos:')
+                st.write(data)
+                st.markdown(get_table_download_link(data), unsafe_allow_html=True)
+                #st.write(coord)
+                col1, col2 = st.beta_columns([1,3])
+                with col1:
+                    st.subheader('Coordenadas dos centróides:')
+                    #Lembrar de renomear as colunas 
+                    st.write(kmeans.cluster_centers_)
 
-            all_groups = alt.Chart(data).mark_circle(size=120).encode(
-            alt.X(lon, scale = alt.Scale(zero = False)) ,
-            alt.Y(lat, scale = alt.Scale(zero = False)),
-            color=alt.condition(selection, 'Label:N', alt.value('lightgray'), legend = alt.Legend(title = 'Grupos:')),
-            tooltip = [alt.Tooltip(c, type = "nominal") for c in tool_feat
-            ]
-            ).interactive().properties(
-                width = 700,
+                #plt.figure( figsize=(15, 10))
+                #scatter_plot = plt.scatter(coord[lon],coord[lat], alpha = 1, c = coord['Labels'], cmap="viridis")
+                #plt.scatter(kmeans.cluster_centers_[:, 1], kmeans.cluster_centers_[:, 0], s = 100, c = 'red',label = 'Centroids')
+                #plt.xlabel('Longitude')
+                #plt.ylabel('Latitude')
+                #plt.legend()
+                #st.pyplot()
+                        
+                #st.write(tool_feat)
+                #st.write(data.columns)
+
+                #Exibição dos grupos
+                with col2:
+                    #Visualização geral
+                    st.subheader('Gráfico de dispersão dos dados:')
+                    selection = alt.selection_multi(fields=['Label'], bind='legend')
+
+                    all_groups = alt.Chart(data).mark_circle(size=120).encode(
+                    alt.X(lon, scale = alt.Scale(zero = False)) ,
+                    alt.Y(lat, scale = alt.Scale(zero = False)),
+                    color=alt.condition(selection, 'Label:N', alt.value('lightgray'), legend = alt.Legend(title = 'Grupos:')),
+                    tooltip = [alt.Tooltip(c, type = "nominal") for c in tool_feat
+                    ]
+                    ).interactive().properties(
+                        width = 700,
+                            height = 450
+                    ).add_selection(
+                    selection
+                    )
+
+                    st.altair_chart(all_groups)
+
+                #Visualização específica
+                st.subheader('Observação individual dos grupos:')    
+                selected_group = st.selectbox('Selecione um grupo:', range(optimalK))
+
+                selection = alt.selection_multi(fields=['Label'], bind='legend')
+
+                data_select = data[data["Label"] == selected_group]
+
+                each_group = alt.Chart(data_select).mark_circle(size=120).encode(
+                alt.X(lon, scale = alt.Scale(zero = False)) ,
+                alt.Y(lat, scale = alt.Scale(zero = False)),
+                tooltip = [alt.Tooltip(c, type = "nominal") for c in tool_feat
+                ]
+                ).interactive().properties(
+                    width = 700,
                     height = 450
-            ).add_selection(
-            selection
-            )
+                ).add_selection(
+                selection
+                )
 
-            st.altair_chart(all_groups)
+                st.altair_chart(each_group)
 
-        #Visualização específica
-        st.subheader('Observação individual dos grupos:')    
-        selected_group = st.selectbox('Selecione um grupo:', range(optimalK))
+                st.write(data_select.describe(include = 'all'))
+                #--------------------------------------------------------------------------------------
+                
+                st.subheader('Mapa:')
+                map = coord
+                map.drop('Labels', axis = 1)
+                map = map.rename(columns={lat:'latitude', lon:"longitude"})
+                st.map(map)
 
-        selection = alt.selection_multi(fields=['Label'], bind='legend')
+                #df = pd.DataFrame(
+                #np.random.randn(1000, 2) / [50, 50] + [37.76, -122.4],
+                #columns=[lat, lon])
 
-        data_select = data[data["Label"] == selected_group]
+                #st.pydeck_chart(pdk.Deck(
+                    #map_style='mapbox://styles/mapbox/light-v9',
+                    #initial_view_state=pdk.ViewState(
+                        #latitude=37.76,
+                        #longitude=-122.4,
+                        #zoom=11,
+                        #pitch=50,
+                    #),
+                    #layers=[
+                        #pdk.Layer(
+                            #'HexagonLayer',
+                            #data=df,
+                            #get_position='[Longitude, Latitude]',
+                            #radius=200,
+                            #elevation_scale=4,
+                            #elevation_range=[0, 1000],
+                            #pickable=True,
+                            #extruded=True,
+                        #),
+                        #pdk.Layer(
+                            #'ScatterplotLayer',
+                            #data=df,
+                            #get_position='[Longitude, Latitude]',
+                            #get_color='[200, 30, 0, 160]',
+                            #get_radius=200,
+                        #),
+                    #],
+                #))
+            ##########################################################################
+                #Teste de criptografia - chave simétrica - Execução
+                
+                #key_file = 'crypt/key.key'
+                #data_file = 'crypt/crypt_test.csv'
+                #crypt_file = 'crypt/test.csv.encrypted'
+                #decrypt_file = 'crypt/secretdf.csv.decrypted'
 
-        each_group = alt.Chart(data_select).mark_circle(size=120).encode(
-        alt.X(lon, scale = alt.Scale(zero = False)) ,
-        alt.Y(lat, scale = alt.Scale(zero = False)),
-        color=alt.condition(selection, 'Label:N', alt.value('lightgray'), legend = alt.Legend(title = 'Grupos:')),
-        tooltip = [alt.Tooltip(c, type = "nominal") for c in tool_feat
-        ]
-        ).interactive().properties(
-            width = 700,
-            height = 450
-        ).add_selection(
-        selection
-        )
-
-        st.altair_chart(each_group)
-
-        st.write(data_select.describe(include = 'all'))
-        #--------------------------------------------------------------------------------------
-        
-        st.subheader('Mapa:')
-        map = coord
-        map.drop('Labels', axis = 1)
-        map = map.rename(columns={lat:'latitude', lon:"longitude"})
-        st.map(map)
-
-        #df = pd.DataFrame(
-        #np.random.randn(1000, 2) / [50, 50] + [37.76, -122.4],
-        #columns=[lat, lon])
-
-        #st.pydeck_chart(pdk.Deck(
-            #map_style='mapbox://styles/mapbox/light-v9',
-            #initial_view_state=pdk.ViewState(
-                #latitude=37.76,
-                #longitude=-122.4,
-                #zoom=11,
-                #pitch=50,
-            #),
-            #layers=[
-                #pdk.Layer(
-                    #'HexagonLayer',
-                    #data=df,
-                    #get_position='[Longitude, Latitude]',
-                    #radius=200,
-                    #elevation_scale=4,
-                    #elevation_range=[0, 1000],
-                    #pickable=True,
-                    #extruded=True,
-                #),
-                #pdk.Layer(
-                    #'ScatterplotLayer',
-                    #data=df,
-                    #get_position='[Longitude, Latitude]',
-                    #get_color='[200, 30, 0, 160]',
-                    #get_radius=200,
-                #),
-            #],
-        #))
-    ##########################################################################
-        #Teste de criptografia - chave simétrica - Execução
-        
-        #key_file = 'crypt/key.key'
-        #data_file = 'crypt/crypt_test.csv'
-        #crypt_file = 'crypt/test.csv.encrypted'
-        #decrypt_file = 'crypt/secretdf.csv.decrypted'
-
-        #save_csv(data,data_file)
-        #key_generate(key_file)
-        #encrypter(data_file, crypt_file, key_getter(key_file))
-        #decrypter(crypt_file, decrypt_file, key_getter(key_file))
+                #save_csv(data,data_file)
+                #key_generate(key_file)
+                #encrypter(data_file, crypt_file, key_getter(key_file))
+                #decrypter(crypt_file, decrypt_file, key_getter(key_file))
         
 #chart_data = pd.DataFrame(
 #    np.random.randn(20, 3),
