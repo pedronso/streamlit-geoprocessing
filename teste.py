@@ -226,6 +226,10 @@ with st.beta_expander("Instruções de uso"):
     st.header('7. Executar agrupamento')
     st.write("Um **_dataframe_** com os dados será exibido no centro da tela, com as coordenadas já convertidas (caso tenha optado por tal). Vale ressaltar que na conversão, todos os dados que não se encaixem no formato serão **excluídos**. Selecione o checkbox para agrupar os dados.")
 
+with st.beta_expander("Sobre"):
+    st.write("Trabalho desenvolvido para a matéria 'Prática Profissional Obrigatória' do curso Técnico em Informática do Instituto Federal de Pernambuco, pelo estudante Pedro Caetano Aráujo Alves, aluno cursante do 4º ano do ensino médio integrado ao técnico, sob a orientação do professor Eugênio Cavalcante Saraiva.")
+    st.write("**Contato:** pedrocaetanoaraujopc@gmail.com, eugeniocsaraiva@gmail.com")
+   
 st.subheader('Data Frame:')
 
 
